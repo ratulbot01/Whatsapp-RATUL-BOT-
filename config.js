@@ -11,4 +11,7 @@ module.exports = {
 
     PAIR_NUMBER: "8801305891747"
 
+    MENU_IMAGE: "./media/menu.jpg",
+    OWNER_IMAGE: "./media/owner.jpg"
+
 }
