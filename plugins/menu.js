@@ -8,7 +8,7 @@ module.exports = {
 
         const from = msg.key.remoteJid
 
-        const image = fs.readFileSync("./media/owner.jpg")
+        const image = fs.readFileSync(config.MENU_IMAGE)
 
         const menuText = `
 ╔═══〔 ${config.BOT_NAME} 〕═══╗
