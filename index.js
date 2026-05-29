@@ -12,12 +12,50 @@ const P = require("pino")
 
 const config = require("./config")
 
+// =========================
+// LOAD ALL PLUGINS
+// =========================
+
+const plugins = {}
+
+function loadPlugins(dir = "./plugins") {
+
+    const files = fs.readdirSync(dir)
+
+    for (const file of files) {
+
+        const fullPath = path.join(dir, file)
+
+        if (fs.statSync(fullPath).isDirectory()) {
+
+            loadPlugins(fullPath)
+
+        } else if (file.endsWith(".js")) {
+
+            delete require.cache[require.resolve(fullPath)]
+
+            const plugin = require(fullPath)
+
+            plugins[plugin.name] = plugin
+
+            console.log(`✅ Plugin Loaded: ${plugin.name}`)
+        }
+    }
+}
+
+loadPlugins()
+
+// =========================
+// START BOT
+// =========================
+
 async function startBot() {
 
     const { state, saveCreds } =
         await useMultiFileAuthState("auth_info_baileys")
 
-    const { version } = await fetchLatestBaileysVersion()
+    const { version } =
+        await fetchLatestBaileysVersion()
 
     const sock = makeWASocket({
         version,
@@ -27,86 +65,128 @@ async function startBot() {
         browser: [config.BOT_NAME, "Chrome", "1.0.0"]
     })
 
-    // Pair Code
-    if (!sock.authState.creds.registered) {
+    // =========================
+    // PAIR CODE SYSTEM
+    // =========================
+
+    if (!state.creds.registered) {
 
         setTimeout(async () => {
 
             const code =
                 await sock.requestPairingCode(config.PAIR_NUMBER)
 
-            console.log("========================")
-            console.log("PAIR CODE:", code)
-            console.log("========================")
+            console.log("================================")
+            console.log(`PAIR CODE : ${code}`)
+            console.log("================================")
 
         }, 3000)
     }
 
-    // Save Session
+    // =========================
+    // SAVE SESSION
+    // =========================
+
     sock.ev.on("creds.update", saveCreds)
 
-    // Connection Update
+    // =========================
+    // CONNECTION UPDATE
+    // =========================
+
     sock.ev.on("connection.update", ({ connection, lastDisconnect }) => {
 
         if (connection === "open") {
-            console.log("✅ BOT CONNECTED")
+
+            console.log("✅ BOT CONNECTED SUCCESSFULLY")
         }
 
         if (connection === "close") {
 
             const shouldReconnect =
-                lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+                lastDisconnect?.error?.output?.statusCode !==
+                DisconnectReason.loggedOut
+
+            console.log("❌ Connection Closed")
 
             if (shouldReconnect) {
+
+                console.log("♻️ Reconnecting...")
                 startBot()
             }
         }
     })
 
-    // Message Event
+    // =========================
+    // MESSAGE EVENT
+    // =========================
+
     sock.ev.on("messages.upsert", async ({ messages }) => {
 
-        const msg = messages[0]
+        try {
 
-        if (!msg.message) return
+            const msg = messages[0]
 
-        const from = msg.key.remoteJid
+            if (!msg.message) return
 
-        const text =
-            msg.message.conversation ||
-            msg.message.extendedTextMessage?.text ||
-            ""
+            if (msg.key.fromMe) return
 
-        if (!text.startsWith(config.PREFIX)) return
+            const from = msg.key.remoteJid
 
-        const args = text.slice(config.PREFIX.length).trim().split(/ +/)
+            const text =
+                msg.message.conversation ||
+                msg.message.extendedTextMessage?.text ||
+                msg.message.imageMessage?.caption ||
+                msg.message.videoMessage?.caption ||
+                ""
 
-        const command = args.shift().toLowerCase()
+            if (!text.startsWith(config.PREFIX)) return
 
-        // Load Plugins
-        const pluginFiles = fs.readdirSync("./plugins")
+            const args =
+                text.slice(config.PREFIX.length).trim().split(/ +/)
 
-        for (const file of pluginFiles) {
+            const command =
+                args.shift().toLowerCase()
 
-            const plugin = require(`./plugins/${file}`)
+            // =========================
+            // EXECUTE PLUGIN
+            // =========================
 
-            if (plugin.name === command) {
+            if (plugins[command]) {
 
-                plugin.execute(sock, msg, args, config)
+                plugins[command].execute(
+                    sock,
+                    msg,
+                    args,
+                    config
+                )
+
+            } else {
+
+                await sock.sendMessage(from, {
+                    text: `❌ Command Not Found`
+                })
             }
-        }
 
+        } catch (err) {
+
+            console.log(err)
+        }
     })
 
-    // Express Server
+    // =========================
+    // EXPRESS SERVER
+    // =========================
+
     const app = express()
 
     app.get("/", (req, res) => {
-        res.send("Bot Running ✅")
+
+        res.send("✅ BOT RUNNING")
     })
 
     app.listen(process.env.PORT || 3000, () => {
-        console.log("🌐 Server Started")
+
+        console.log("🌐 SERVER STARTED")
     })
 }
 
