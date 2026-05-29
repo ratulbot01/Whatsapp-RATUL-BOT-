@@ -1,0 +1,15 @@
+{
+  "name": "ratul-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp Multi Device Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "latest",
+    "express": "latest",
+    "fs-extra": "latest",
+    "pino": "latest"
+  }
+}
